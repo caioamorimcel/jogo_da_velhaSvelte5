@@ -1,29 +1,31 @@
-<!-- <svelte:options runes={true} /> -->
+<svelte:options runes={true} />
 
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { emoji } from './emoji';
 
-	type State = 'comece' | 'jogando' | 'pausado' | 'ganhou' | 'perdeu';
+	type typeState = 'comece' | 'jogando' | 'pausado' | 'ganhou' | 'perdeu';
 
-	let state: State = 'comece';
-	let size = 10;
-	let grid = createGrid();
-	let maxMatches = grid.length / 2;
-	let selected: number[] = [];
-	let matches: string[] = [];
-	let timerId: number | null = null;
-	let time = 60;
+	let status = $state<typeState>('comece');
+	let size = $state(10);
+	let grid = $state(functionCreateGrid());
+	let selected = $state<number[]>([]);
+	let matches = $state<string[]>([]);
+	let timerId = $state<number | null>(null);
+	let time = $state(60);
 
-	function startGameTimer() {
+	let derivedMaxMatches = $derived(grid.length / 2);
+
+	function functionStartGameTimer() {
 		function countdown() {
-			if (state !== 'pausado') {
+			if (status !== 'pausado') {
 				time -= 1;
 			}
 		}
 		timerId = setInterval(countdown, 1000);
 	}
 
-	function createGrid() {
+	function functionCreateGrid() {
 		let cards = new Set<string>();
 		let maxSize = size / 2;
 
@@ -32,108 +34,114 @@
 			cards.add(emoji[randomIndex]);
 		}
 
-		return shuffle([...cards, ...cards]);
+		return functionShuffle([...cards, ...cards]);
 	}
 
-	function shuffle<Items>(array: Items[]) {
+	function functionShuffle<Items>(array: Items[]) {
 		return array.sort(() => Math.random() - 0.5);
 	}
 
-	function selectedCard(cardIndex: number) {
+	function functionSelectedCard(cardIndex: number) {
 		selected = selected.concat(cardIndex);
 	}
 
-	function timeoutfunction() {
-		selected = []; // Limpa a seleção sem disparar reatividade
+	function functionTimeout() {
+		selected = [];
 	}
 
-	function matchCards() {
+	function functionMatchCards() {
 		const [first, second] = selected;
 
 		if (grid[first] === grid[second]) {
 			matches = matches.concat(grid[first]);
 		}
 
-		setTimeout(timeoutfunction, 300);
+		setTimeout(functionTimeout, 300);
 	}
 
-	function resetGame() {
+	function functionResetGame() {
 		if (timerId) {
 			clearInterval(timerId);
 		}
-		grid = createGrid();
-		maxMatches = grid.length / 2;
+		grid = functionCreateGrid();
 		selected = [];
 		matches = [];
 		timerId = null;
 		time = 60;
 	}
 
-	function gameWon() {
-		state = 'ganhou';
-		resetGame();
+	function functionGameWon() {
+		status = 'ganhou';
+		functionResetGame();
 	}
 
-	function gameLost() {
-		state = 'perdeu';
-		resetGame();
+	function functionGameLost() {
+		status = 'perdeu';
+		functionResetGame();
 	}
 
-	function pauseGame(e: KeyboardEvent) {
+	function functionPauseGame(e: KeyboardEvent) {
 		if (e.key === 'Escape') {
-			switch (state) {
+			switch (status) {
 				case 'jogando':
-					state = 'pausado';
+					status = 'pausado';
 					break;
 				case 'pausado':
-					state = 'jogando';
+					status = 'jogando';
 					break;
 			}
 		}
 	}
 
-	$: if (state === 'jogando') {
-		if (!timerId) {
-			startGameTimer();
+	$effect(() => {
+		if (status === 'jogando') {
+			if (!timerId) {
+				untrack(() => functionStartGameTimer());
+			}
 		}
-	}
+	});
 
-	$: {
+	$effect(() => {
 		if (selected.length === 2) {
-			matchCards();
+			untrack(() => functionMatchCards());
 		}
-	}
-	$: {
-		if (maxMatches === matches.length) {
-			gameWon();
+	});
+
+	$effect(() => {
+		if (derivedMaxMatches === matches.length) {
+			functionGameWon();
 		}
-	}
-	$: {
+	});
+
+	$effect(() => {
 		if (time === 0) {
-			gameLost();
+			functionGameLost();
 		}
-	}
-	$: console.log({ state, selected, matches });
+	});
+
+	$effect(() => {
+		console.log({ status, selected, matches });
+	});
 </script>
 
-<svelte:window on:keydown={pauseGame} />
+<svelte:window on:keydown={functionPauseGame} />
 
-{#if state === 'pausado'}
+{#if status === 'pausado'}
 	<h1>Jogo pausado</h1>
 {/if}
 
-{#if state === 'comece'}
+{#if status === 'comece'}
 	<h1>Marcando jogo</h1>
-	<button on:click={() => (state = 'jogando')}>Jogar</button>
+	<button onclick={() => (status = 'jogando')}>Jogar</button>
 {/if}
 
-{#if state === 'jogando'}
+{#if status === 'jogando'}
 	<h1 class="timer" class:pulse={time <= 10}>
 		{time}
 	</h1>
 
 	<div class="matches">
-		{#each matches as card (card)}
+		{#each matches as card, i (`q${i}`)}
 			<div>{card}</div>
 		{/each}
 	</div>
@@ -149,21 +157,21 @@
 				class:selected={isSelected}
 				class:flip={isSelectedOrMatched}
 				disabled={isSelectedOrMatched}
-				on:click={() => selectedCard(cardIndex)}
+				onclick={() => functionSelectedCard(cardIndex)}
 			>
 				<div class="back" class:match>{card}</div>
 			</button>
 		{/each}
 	</div>
 {/if}
-{#if state === 'perdeu'}
+{#if status === 'perdeu'}
 	<h1>Você perdeu🤣</h1>
-	<button on:click={() => (state = 'jogando')}>Tente novamente</button>
+	<button onclick={() => (status = 'jogando')}>Tente novamente</button>
 {/if}
 
-{#if state === 'ganhou'}
+{#if status === 'ganhou'}
 	<h1>Você ganhou 🤩</h1>
-	<button on:click={() => (state = 'jogando')}>Jogue novamente</button>
+	<button onclick={() => (status = 'jogando')}>Jogue novamente</button>
 {/if}
 
 <style>
